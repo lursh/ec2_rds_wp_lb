@@ -1,0 +1,36 @@
+---
+# tasks file for setup_ec2_wp
+###############################################################
+#The following is for configuring wordpress in the ec2 instances
+    - package: 
+        name: php
+        state: absent
+    - command: "amazon-linux-extras install php7.4 -y"
+    - package: 
+        name: php-mysqli
+        state: present
+    - package: 
+        name: mysql
+        state: present
+    - package:
+        name: httpd
+        state: present
+    - service: 
+        name: httpd
+        state: started
+    - get_url: 
+        url: https://wordpress.org/latest.tar.gz
+        dest: /home/ec2-user/latest.tar.gz
+    - file:
+        path: /var/www/html/
+        state: directory
+        owner: apache
+        mode: 0744
+    - unarchive:
+        src: /home/ec2-user/latest.tar.gz
+        dest: /var/www/html/
+        remote_src: yes
+    - template:
+        src: wp-config.php
+        dest: /var/www/html/wordpress/wp-config.php
+    - command: "chown -R apache /var/www/html"

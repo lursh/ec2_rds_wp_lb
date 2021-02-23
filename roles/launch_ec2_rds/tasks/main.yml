@@ -1,0 +1,152 @@
+---
+# tasks file for launch_ec2_rds
+#################################
+  - name: create a vpc
+    amazon.aws.ec2_vpc_net:
+      aws_access_key: "{{ aws_access_key_ }}"
+      aws_secret_key: "{{ aws_secret_key_ }}"
+      cidr_block: "{{ vpc_cidr_block_ }}"
+      region: "{{ ec2_region_ }}"
+      name: "{{ vpc_cidr_block_ }}_Myvpc"
+      state: present
+    register: ec2_vpc_created
+################################
+  - name: Create internet gateway and attach it to the vpc.
+    community.aws.ec2_vpc_igw:
+      aws_access_key: "{{ aws_access_key_ }}"
+      aws_secret_key: "{{ aws_secret_key_ }}"
+      region: "{{ ec2_region_ }}"
+      vpc_id: "{{ ec2_vpc_created.vpc.id }}"
+      state: present
+    register: igw
+#################################
+  - name: Create a public subnet in the vpc
+    amazon.aws.ec2_vpc_subnet: 
+      aws_access_key: "{{ aws_access_key_ }}"
+      aws_secret_key: "{{ aws_secret_key_ }}"
+      state: present
+      vpc_id: "{{ ec2_vpc_created.vpc.id }}"
+      region: "{{ ec2_region_ }}"
+      cidr: "{{ subnet_cidr1 }}"
+      tags: 
+        Name: "{{ subnet_cidr1 }}_MySubnet"
+      az: "{{ az_1}}" 
+    register: subnet_created_public
+    #################################
+  - name: Create a PRIVATE subnet in the vpc
+    amazon.aws.ec2_vpc_subnet: 
+      aws_access_key: "{{ aws_access_key_ }}"
+      aws_secret_key: "{{ aws_secret_key_ }}"
+      state: present
+      vpc_id: "{{ ec2_vpc_created.vpc.id }}"
+      region: "{{ ec2_region_ }}"
+      cidr: "{{ subnet_cidr2 }}"
+      tags: 
+        Name: "{{ subnet_cidr2 }}_MySubnet"
+      az: "{{ az_2}}" 
+    register: subnet_created_private
+##################################
+  - name: Set up public subnet route table
+    community.aws.ec2_vpc_route_table: 
+      aws_access_key: "{{ aws_access_key_ }}"
+      aws_secret_key: "{{ aws_secret_key_ }}"
+      vpc_id: "{{ ec2_vpc_created.vpc.id }}"
+      region: "{{ ec2_region_ }}"
+      tags:
+        Name: Public
+      subnets:
+        - "{{ subnet_created_public.subnet.id }}"
+        - "{{ subnet_created_private.subnet.id }}"    
+      routes:
+        - dest: 0.0.0.0/0
+          gateway_id: "{{ igw.gateway_id }}"
+    register: public_route_table
+#################################
+
+  - name: create a Security group
+    amazon.aws.ec2_group: 
+      name: "MySG"
+      description: sg with rule descriptions
+      aws_access_key: "{{ aws_access_key_ }}"
+      aws_secret_key: "{{ aws_secret_key_ }}"
+      region: "{{ ec2_region_ }}"
+      vpc_id: "{{ ec2_vpc_created.vpc.id }}"
+      rules:
+        - proto: tcp
+          ports:
+          - 22
+          - 80
+          - 3306
+          - 1433
+          - 5432
+          cidr_ip: 0.0.0.0/0
+          rule_desc: allow traffic on port 22 and 80
+    register: SG
+######################################
+  - name: launching an ec2 instance for backend
+    ec2: 
+      assign_public_ip: yes
+      aws_access_key: "{{ aws_access_key_ }}"
+      aws_secret_key: "{{ aws_secret_key_ }}"
+      count: "{{ count_backend }}"
+      group_id: "{{ SG.group_id  }}"
+      image: "{{ image_ }}"
+      instance_tags: "{{ instance_tags_backend }}"
+      instance_type: "{{ instance_type_ }}"
+      key_name: "{{ private_key_name }}"
+      region: "{{ ec2_region_ }}"
+      vpc_subnet_id: "{{ subnet_created_private.subnet.id }}"
+    register: ec2_instances_frontend
+######################################
+  - name: launching an ec2 instance for frontend
+    ec2: 
+      assign_public_ip: yes
+      aws_access_key: "{{ aws_access_key_ }}"
+      aws_secret_key: "{{ aws_secret_key_ }}"
+      count: "{{ count_frontend }}"
+      group_id: "{{ SG. group_id  }}"
+      image: "{{ image_ }}"
+      instance_tags: "{{ instance_tags_frontend }}"
+      instance_type: "{{ instance_type_ }}"
+      key_name: "{{ private_key_name }}"
+      region: "{{ ec2_region_ }}"
+      vpc_subnet_id: "{{ subnet_created_public.subnet.id }}"
+    register: ec2_instances
+###############################################
+  - name: Add or change a subnet group
+    community.aws.rds_subnet_group:
+      aws_access_key: "{{ aws_access_key_ }}"
+      aws_secret_key: "{{ aws_secret_key_ }}"
+      state: present
+      name: 'lur-wordpress-subnet-group'
+      description: my wp Subnet Group
+      subnets:
+        - "{{ subnet_created_private.subnet.id }}"
+        - "{{ subnet_created_public.subnet.id }}"
+      region: 'ap-south-1'
+    register: subnet_group_created
+###############################################
+  - name: Basic mysql provisioning example
+    community.aws.rds_instance:
+      aws_access_key: "{{ aws_access_key_ }}"
+      aws_secret_key: "{{ aws_secret_key_ }}"
+      db_name: wordpress
+      publicly_accessible: no
+      db_subnet_group_name:  "{{ subnet_group_created.subnet_group.name }}"
+      allocated_storage: 20
+      storage_type: standard
+      db_instance_identifier: wordpress-database
+      engine: MySQL
+      availability_zone: ap-south-1a
+      region: ap-south-1
+      backup_retention_period: 7
+      db_instance_class: db.t2.micro
+      master_username: admin
+      master_user_password : lurshai2719
+      vpc_security_group_ids: "{{ SG.group_id  }}"
+      tags:
+        Application: Wordpress
+    register: rds_output
+  - name: Export role1_varfoo to a 'host-fact' type variable
+    set_fact:
+      rds_end_point: "{{ rds_output.endpoint.address }}"

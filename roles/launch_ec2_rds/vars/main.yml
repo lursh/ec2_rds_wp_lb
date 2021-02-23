@@ -1,0 +1,22 @@
+---
+# vars file for launch_ec2_rds
+aws_access_key_: 
+aws_secret_key_: 
+count_frontend: 1
+count_backend: 2
+security_group_id_: "sg-0952af5b07c65701f"
+image_: ami-08e0ca9924195beba
+instance_type_: t2.micro 
+instance_tags_backend:
+  purpose: "wordpress"
+  Name: "wordpress"
+instance_tags_frontend:
+  Name: "LB"
+  purpose: "LB"
+ec2_region_: ap-south-1
+az_1: ap-south-1a
+az_2: ap-south-1b
+vpc_cidr_block_: 192.168.0.0/16
+subnet_cidr1: 192.168.0.0/24
+subnet_cidr2: 192.168.1.0/24
+private_key_name: keyname

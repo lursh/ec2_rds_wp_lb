@@ -1,0 +1,13 @@
+---
+# tasks file for setup_ec2_lb
+################################# 
+#The following is for configuring haproxy in the frontend ec2 instances
+    - package: 
+        name: haproxy
+        state: present
+    - template: 
+        src: haproxy.cfg
+        dest: /etc/haproxy/haproxy.cfg
+    - service: 
+        name: haproxy
+        state: started

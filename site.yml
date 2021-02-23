@@ -1,0 +1,29 @@
+- name: This play is for setting up ec2 for frontend server
+  hosts: localhost
+  connection: local
+  roles:
+    - launch_ec2_rds 
+- name: This play is for refreshing the inventory
+  hosts: localhost
+  connection: local
+  tasks: 
+    - name: Sleep for 70 seconds and continue with play
+      wait_for: 
+        timeout: 70
+    - meta: refresh_inventory
+- name: This play is for setting up Load Balancer's frontend server
+  hosts: tag_Name_wordpress
+  become: yes
+  connection: ssh
+  remote_user: ec2-user
+  gather_facts: yes
+  roles:
+    - setup_ec2_wp
+- name: This play is for setting up Load Balancer's backend server
+  hosts: tag_Name_LB
+  become: yes
+  connection: ssh
+  remote_user: ec2-user
+  gather_facts: yes
+  roles:
+    - setup_ec2_lb
